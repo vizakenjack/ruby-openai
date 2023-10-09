@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'pry'
-
 module OpenAI
   module HTTP
     def get(path:)
