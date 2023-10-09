@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+require 'pry'
+
 module OpenAI
   module HTTP
     def get(path:)
@@ -54,10 +58,18 @@ module OpenAI
     # @return [Proc] An outer proc that iterates over a raw stream, converting it to JSON.
     def to_json_stream(user_proc:)
       proc do |chunk, _|
-        chunk.scan(/(?:data|error): (\{.*\})/i).flatten.each do |data|
-          user_proc.call(JSON.parse(data))
-        rescue JSON::ParserError
-          # Ignore invalid JSON.
+        if chunk.include?('"error":')
+          begin
+            user_proc.call(JSON.parse(chunk))
+          rescue JSON::ParserError
+            # ignore
+          end
+        else
+          chunk.scan(/(?:data|error): (\{.*\})/i).flatten.each do |data|
+            user_proc.call(JSON.parse(data))
+          rescue JSON::ParserError
+            # Ignore invalid JSON.
+          end
         end
       end
     end
@@ -90,14 +102,14 @@ module OpenAI
       {
         "Content-Type" => "application/json",
         "Authorization" => "Bearer #{@access_token}",
-        "OpenAI-Organization" => @organization_id
+        "OpenAI-Organization" => @organization_id,
       }
     end
 
     def azure_headers
       {
         "Content-Type" => "application/json",
-        "api-key" => @access_token
+        "api-key" => @access_token,
       }
     end
 
