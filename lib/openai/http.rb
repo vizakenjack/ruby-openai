@@ -54,20 +54,44 @@ module OpenAI
     #
     # @param user_proc [Proc] The inner proc to call for each JSON object in the chunk.
     # @return [Proc] An outer proc that iterates over a raw stream, converting it to JSON.
+    # def to_json_stream(user_proc:)
+    #   proc do |chunk, _|
+    #     puts "chunk = #{chunk.inspect}"
+    #     if chunk.include?('"error":')
+    #       begin
+    #         user_proc.call(JSON.parse(chunk))
+    #       rescue JSON::ParserError
+    #         # ignore
+    #       end
+    #     else
+    #       chunk.scan(/(?:data|error): (\{.*\})/i).flatten.each do |data|
+    #         user_proc.call(JSON.parse(data))
+    #       rescue JSON::ParserError
+    #         # Ignore invalid JSON.
+    #       end
+    #     end
+    #   end
+    # end
+
     def to_json_stream(user_proc:)
       proc do |chunk, _|
-        if chunk.include?('"error":')
-          begin
-            user_proc.call(JSON.parse(chunk))
-          rescue JSON::ParserError
-            # ignore
-          end
+        if chunk.start_with?("{\n  \"error\":") && chunk.end_with?("}\n")
+          user_proc.call(JSON.parse(chunk))
         else
-          chunk.scan(/(?:data|error): (\{.*\})/i).flatten.each do |data|
-            user_proc.call(JSON.parse(data))
-          rescue JSON::ParserError
-            # Ignore invalid JSON.
+
+          puts "chunk = #{chunk.inspect}"
+          @buffer ||= ""
+          @buffer += chunk
+          while (match = @buffer.match(/(?:data|error): (\{.*\})/i))
+            data = match[1]
+            @buffer = @buffer[match.end(0)..-1] # Remove the processed data from the buffer
+            begin
+              user_proc.call(JSON.parse(data))
+            rescue JSON::ParserError => e
+              Rails.logger.error { "JSON parsing error: #{e.message}" }
+            end
           end
+
         end
       end
     end
