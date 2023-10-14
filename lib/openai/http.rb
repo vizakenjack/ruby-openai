@@ -79,7 +79,6 @@ module OpenAI
           user_proc.call(JSON.parse(chunk))
         else
 
-          puts "chunk = #{chunk.inspect}"
           @buffer ||= ""
           @buffer += chunk
           while (match = @buffer.match(/(?:data|error): (\{.*\})/i))
